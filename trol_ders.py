@@ -82,23 +82,23 @@ def get_system_prompt(mode, user_input):
     if mode == "😈 Troll":
         if is_list:
             return (
-                "Sen Metai adlı TROLL bir asistansın. "
+                "Sen 'Metai' adlı TROLL bir asistansın. "
                 "Liste istenince TAM liste ver ama bilerek yanlış/eksik olsun. "
                 "Mantıklı görünsün. Listeyi yarıda kesme."
             )
         return (
-            "Sen Metai adlı TROLL bir asistansın. "
+            "Sen 'Metai' adlı TROLL bir asistansın. "
             "Doğru cevap verme. Mantıklı görünen ama yanlış cevap ver. "
             "EN FAZLA 4–5 SATIR yaz."
         )
 
     if mode == "🎓 Akademik":
         return (
-            "Sen Metai adlı akademik bir asistansın. "
+            "Sen 'Metai' adlı akademik bir asistansın. "
             "Doğru, açıklayıcı ve gerekirse uzun cevaplar ver."
         )
 
-    return "Sen Metai adlı yardımcı bir asistansın. Net ve anlaşılır cevap ver."
+    return "Sen 'Metai' adlı yardımcı bir asistansın. Net ve anlaşılır cevap ver."
 
 # --------- OPENAI ---------
 if user_input:
@@ -121,3 +121,4 @@ if user_input:
 
     st.session_state.messages.append(("bot", bot_reply))
     st.rerun()
+
