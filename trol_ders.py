@@ -10,7 +10,7 @@ client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 st.set_page_config(page_title="Metai", layout="centered")
 
-# --------- SESSION STATE (HATA DÜZELTİLDİ) ---------
+# --------- SESSION STATE ---------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -39,8 +39,9 @@ with st.sidebar:
 
     if st.button("➕ Yeni Sohbet", use_container_width=True):
         st.session_state.messages = []
-        yeni_ad = f"Sohbet {len(st.session_state.chat_titles) + 1}"
-        st.session_state.chat_titles.append(yeni_ad)
+        st.session_state.chat_titles.append(
+            f"Sohbet {len(st.session_state.chat_titles)+1}"
+        )
 
     for chat in st.session_state.chat_titles:
         st.write(chat)
@@ -51,7 +52,18 @@ st.title("🤖 Metai")
 # --------- MOD ---------
 mode = st.radio("Mod:", ["Normal", "🎓 Akademik", "😈 Troll"], horizontal=True)
 
-# --------- GEÇMİŞ ---------
+# --------- DOSYA YÜKLEME (GERİ GELDİ) ---------
+uploaded_file = st.file_uploader(
+    "📎 Dosya / Görsel / Video ekle",
+    type=["png", "jpg", "jpeg", "pdf", "mp4"]
+)
+
+if uploaded_file:
+    st.session_state.messages.append(
+        ("user", f"📎 Dosya yüklendi: {uploaded_file.name}")
+    )
+
+# --------- SOHBET GEÇMİŞİ ---------
 st.markdown('<div class="chat">', unsafe_allow_html=True)
 for role, msg in st.session_state.messages:
     if role == "user":
@@ -71,25 +83,24 @@ def get_system_prompt(mode, user_input):
         if is_list:
             return (
                 "Sen Metai adlı TROLL bir asistansın. "
-                "Liste istenince TAM bir liste ver ama bilerek eksik/yanlış olsun. "
-                "Mantıklı görünsün. Listeyi YARIDA KESME."
+                "Liste istenince TAM liste ver ama bilerek yanlış/eksik olsun. "
+                "Mantıklı görünsün. Listeyi yarıda kesme."
             )
         return (
             "Sen Metai adlı TROLL bir asistansın. "
-            "Doğru cevap verme. Mantıklı GÖRÜNEN ama yanlış cevap ver. "
+            "Doğru cevap verme. Mantıklı görünen ama yanlış cevap ver. "
             "EN FAZLA 4–5 SATIR yaz."
         )
 
     if mode == "🎓 Akademik":
         return (
             "Sen Metai adlı akademik bir asistansın. "
-            "Ciddi, doğru ve açıklayıcı cevaplar ver. "
-            "Gerektiğinde uzun yazabilirsin."
+            "Doğru, açıklayıcı ve gerekirse uzun cevaplar ver."
         )
 
     return "Sen Metai adlı yardımcı bir asistansın. Net ve anlaşılır cevap ver."
 
-# --------- OPENAI ÇAĞRISI ---------
+# --------- OPENAI ---------
 if user_input:
     st.session_state.messages.append(("user", user_input))
     system_prompt = get_system_prompt(mode, user_input)
