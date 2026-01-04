@@ -2,18 +2,26 @@ import streamlit as st
 from openai import OpenAI
 
 # ================== OPENAI ==================
+# API KEY KODDA YOK!
+# Streamlit Cloud > Settings > Secrets içine şunu ekle:
+# OPENAI_API_KEY = "sk-xxxx"
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 # ============================================
 
-st.set_page_config(page_title="Met AI", layout="wide")
+st.set_page_config(page_title="Metai", layout="centered")
+
+# --------- SESSION STATE (HATA DÜZELTİLDİ) ---------
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "chat_titles" not in st.session_state:
+    st.session_state.chat_titles = ["Sohbet 1"]
 
 # ----------------- CSS -----------------
 st.markdown("""
 <style>
 body { background-color:#0f0f0f; color:white; }
-
-.chat { max-width:700px; margin:auto; }
-
+.chat { max-width:720px; margin:auto; }
 .user {
     background:#2b2b2b; color:white; padding:10px 14px;
     border-radius:18px; margin:8px 0; text-align:right;
@@ -22,52 +30,26 @@ body { background-color:#0f0f0f; color:white; }
     background:#1e1e1e; color:white; padding:10px 14px;
     border-radius:18px; margin:8px 0; text-align:left;
 }
-
-.small {
-    color:#888; font-size:13px;
-}
 </style>
 """, unsafe_allow_html=True)
 
-# ================== SIDEBAR ==================
+# ----------------- SIDEBAR -----------------
 with st.sidebar:
-    st.markdown("## 🧠 Sohbetler")
-
-    if "chat_titles" not in st.session_state:
-        st.session_state.chat_titles = ["Yeni Sohbet"]
-
-    for title in st.session_state.chat_titles:
-        st.button(f"💬 {title}", use_container_width=True)
+    st.title("💬 Sohbetler")
 
     if st.button("➕ Yeni Sohbet", use_container_width=True):
         st.session_state.messages = []
-        st.session_state.chat_titles.append("Yeni Sohbet")
+        yeni_ad = f"Sohbet {len(st.session_state.chat_titles) + 1}"
+        st.session_state.chat_titles.append(yeni_ad)
 
-    st.markdown("---")
-    st.markdown("### 📎 Dosya Yükle (Deneysel)")
-    st.file_uploader("Dosya", label_visibility="collapsed")
-    st.file_uploader("🖼️ Görsel", type=["png", "jpg", "jpeg"])
-    st.file_uploader("🎥 Video", type=["mp4", "mov"])
+    for chat in st.session_state.chat_titles:
+        st.write(chat)
 
-    st.markdown(
-        "<div class='small'>Bu özellikler deneysel moddadır.</div>",
-        unsafe_allow_html=True
-    )
-
-# ================== ANA EKRAN ==================
-st.title("🤖 Met AI")
-st.markdown("<div class='small'>Deneysel Akademik Yapay Zekâ</div>", unsafe_allow_html=True)
+# ----------------- ANA EKRAN -----------------
+st.title("🤖 Metai")
 
 # --------- MOD ---------
-mode = st.radio(
-    "Mod:",
-    ["Normal", "🎓 Akademik", "😈 Troll"],
-    horizontal=True
-)
-
-# --------- HAFIZA ---------
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+mode = st.radio("Mod:", ["Normal", "🎓 Akademik", "😈 Troll"], horizontal=True)
 
 # --------- GEÇMİŞ ---------
 st.markdown('<div class="chat">', unsafe_allow_html=True)
@@ -79,7 +61,7 @@ for role, msg in st.session_state.messages:
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --------- GİRİŞ ---------
-user_input = st.chat_input("Met AI’ye bir şey sor...")
+user_input = st.chat_input("Bir şey yaz...")
 
 def get_system_prompt(mode, user_input):
     list_words = ["say", "listele", "sırala", "isimlerini", "kaç tane", "nelerdir"]
@@ -88,32 +70,31 @@ def get_system_prompt(mode, user_input):
     if mode == "😈 Troll":
         if is_list:
             return (
-                "Sen Met AI adlı TROLL bir asistansın. "
-                "Liste istenince TAM bir liste ver ama bilerek eksik veya yanlış olsun. "
-                "Mantıklı görünsün. Listeyi yarıda kesme."
+                "Sen Metai adlı TROLL bir asistansın. "
+                "Liste istenince TAM bir liste ver ama bilerek eksik/yanlış olsun. "
+                "Mantıklı görünsün. Listeyi YARIDA KESME."
             )
         return (
-            "Sen Met AI adlı TROLL bir asistansın. "
-            "Mantıklı GÖRÜNEN ama yanlış cevaplar ver. "
-            "En fazla 4–5 satır yaz."
+            "Sen Metai adlı TROLL bir asistansın. "
+            "Doğru cevap verme. Mantıklı GÖRÜNEN ama yanlış cevap ver. "
+            "EN FAZLA 4–5 SATIR yaz."
         )
 
     if mode == "🎓 Akademik":
         return (
-            "Sen Met AI adlı akademik bir asistansın. "
-            "Bilimsel, net ve ciddi cevaplar ver. "
-            "Gereksiz uzatma yapma."
+            "Sen Metai adlı akademik bir asistansın. "
+            "Ciddi, doğru ve açıklayıcı cevaplar ver. "
+            "Gerektiğinde uzun yazabilirsin."
         )
 
-    return "Sen Met AI adlı yardımcı bir asistansın. Kısa ve net cevaplar ver."
+    return "Sen Metai adlı yardımcı bir asistansın. Net ve anlaşılır cevap ver."
 
-# --------- CEVAP ---------
+# --------- OPENAI ÇAĞRISI ---------
 if user_input:
     st.session_state.messages.append(("user", user_input))
-
     system_prompt = get_system_prompt(mode, user_input)
 
-    with st.spinner("🤖 Met AI düşünüyor..."):
+    with st.spinner("Metai düşünüyor..."):
         try:
             resp = client.responses.create(
                 model="gpt-4.1-mini",
@@ -121,11 +102,11 @@ if user_input:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_input}
                 ],
-                max_output_tokens=220
+                max_output_tokens=350
             )
             bot_reply = resp.output_text
         except Exception:
-            bot_reply = "⚠️ Yapay zekâya bağlanılamadı. (API / Secrets kontrol et)"
+            bot_reply = "⚠️ Yapay zekâya bağlanılamadı. (API/Secrets kontrol et)"
 
     st.session_state.messages.append(("bot", bot_reply))
     st.rerun()
