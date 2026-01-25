@@ -48,9 +48,6 @@ if "chats" not in st.session_state:
     st.session_state.chats = {"Sohbet 1": []}
     st.session_state.active_chat = "Sohbet 1"
 
-if "memory" not in st.session_state:
-    st.session_state.memory = []
-
 if st.sidebar.button("➕ Yeni Sohbet"):
     name = f"Sohbet {len(st.session_state.chats)+1}"
     st.session_state.chats[name] = []
@@ -63,14 +60,6 @@ for chat in st.session_state.chats:
         st.rerun()
 
 mode = st.sidebar.radio("Mod:", ["Normal", "🎓 Akademik", "😈 Troll"])
-
-# ----------------- ASSISTANT IDENTITY -----------------
-assistant_identity = (
-    "Senin adın MetAI. "
-    "Bu uygulama için geliştirilmiş deneysel bir yapay zekâ asistanısın. "
-    "ChatGPT olduğunu ASLA söyleme. "
-    "Kullanıcıyla kurduğun bağlamı ve verilen bilgileri hatırla."
-)
 
 # ----------------- MAIN -----------------
 st.title("🤖 Metai")
@@ -96,28 +85,19 @@ if uploaded_file:
 user_input = st.chat_input("Bir şey yaz...")
 
 def system_prompt(mode):
-    base = assistant_identity
-
-    if st.session_state.memory:
-        base += " Kullanıcı hakkında bildiklerin: " + "; ".join(st.session_state.memory)
-
     if mode == "😈 Troll":
-        return base + " Troll moddasın. Mantıklı görünen ama yanlış cevaplar ver."
+        return "Sen Metai adlı TROLL bir asistansın. Mantıklı görünen ama yanlış cevaplar ver."
     if mode == "🎓 Akademik":
-        return base + " Akademik ve ciddi cevaplar ver."
-    return base + " Yardımcı ve samimi cevaplar ver."
-
-def extract_memory(text):
-    keywords = ["ben", "adım", "sınıf", "öğrenciyim", "hedefim", "istiyorum"]
-    if any(k in text.lower() for k in keywords):
-        st.session_state.memory.append(text)
+        return "Sen akademik ve ciddi bir asistansın."
+    return "Sen yardımcı bir asistansın."
 
 if user_input:
     messages.append(("user", user_input))
-    extract_memory(user_input)
 
     try:
-        content = [{"type": "input_text", "text": user_input}]
+        content = [
+            {"type": "input_text", "text": user_input}
+        ]
 
         if image_base64:
             content.append({
