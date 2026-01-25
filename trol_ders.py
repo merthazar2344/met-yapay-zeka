@@ -24,6 +24,7 @@ body { background-color:#0f0f0f; color:white; }
 </style>
 """, unsafe_allow_html=True)
 
+
 # ----------------- SIDEBAR -----------------
 st.sidebar.title("💬 Sohbetler")
 
@@ -105,3 +106,4 @@ if user_input:
 
     messages.append(("bot", reply))
     st.rerun()
+
