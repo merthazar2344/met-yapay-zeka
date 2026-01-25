@@ -16,14 +16,30 @@ client = OpenAI(api_key=api_key)
 
 st.set_page_config(page_title="Metai", layout="wide")
 
+# ----------------- CSS -----------------
 st.markdown("""
 <style>
-body { background-color:#0f0f0f; color:white; }
-.user { background:#2b2b2b; padding:10px; border-radius:16px; text-align:right; margin:6px 0; }
-.bot { background:#1e1e1e; padding:10px; border-radius:16px; text-align:left; margin:6px 0; }
+body { background-color:#0f0f0f; color:black; }
+
+.user {
+    background:#cfcfcf;
+    color:black;
+    padding:10px;
+    border-radius:16px;
+    text-align:right;
+    margin:6px 0;
+}
+
+.bot {
+    background:#e0e0e0;
+    color:black;
+    padding:10px;
+    border-radius:16px;
+    text-align:left;
+    margin:6px 0;
+}
 </style>
 """, unsafe_allow_html=True)
-
 
 # ----------------- SIDEBAR -----------------
 st.sidebar.title("💬 Sohbetler")
@@ -106,4 +122,3 @@ if user_input:
 
     messages.append(("bot", reply))
     st.rerun()
-
