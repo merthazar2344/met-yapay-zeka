@@ -207,12 +207,12 @@ with st.container():
 # ----------------- SOHBET GEÇMİŞİ -----------------
 messages = active_data["messages"]
 
-for msg in messages:
-    if len(msg) == 4:
-        role, kind, content, ts = msg
-    else:
-        role, kind, content = msg
-        ts = ""
+for idx, msg in enumerate(messages):
+    role = msg[0]
+    kind = msg[1]
+    content = msg[2]
+    ts = msg[3] if len(msg) > 3 else ""
+    feedback = msg[4] if len(msg) > 4 else None
 
     display_role = "user" if role == "user" else "assistant"
     avatar = "🙂" if role == "user" else "🧠"
@@ -225,76 +225,59 @@ for msg in messages:
         if ts:
             st.markdown(f'<div class="temai-timestamp">{ts}</div>', unsafe_allow_html=True)
 
-# ----------------- TEK BUTON: RESİM + BELGE EKLEME -----------------
+        # Sadece bot'un yazı cevaplarına geri bildirim butonu koyuyoruz.
+        if role == "bot" and kind == "text":
+            if feedback:
+                icon = "👍" if feedback == "up" else "👎"
+                st.caption(f"Geri bildirimin: {icon}")
+            else:
+                fb_col1, fb_col2, _ = st.columns([1, 1, 10])
+                with fb_col1:
+                    if st.button("👍", key=f"fbup_{st.session_state.active_chat}_{idx}"):
+                        while len(messages[idx]) < 5:
+                            messages[idx].append(None)
+                        messages[idx][4] = "up"
+                        save_chats()
+                        st.rerun()
+                with fb_col2:
+                    if st.button("👎", key=f"fbdown_{st.session_state.active_chat}_{idx}"):
+                        while len(messages[idx]) < 5:
+                            messages[idx].append(None)
+                        messages[idx][4] = "down"
+                        save_chats()
+                        st.rerun()
+
+# ----------------- KAMERA (ayrı, çünkü canlı çekim chat kutusunun içine gömülemiyor) -----------------
 if "upload_key" not in st.session_state:
     st.session_state.upload_key = 0
 if "camera_open" not in st.session_state:
     st.session_state.camera_open = False
 
-attach_col1, attach_col2 = st.columns([4, 1])
-with attach_col1:
-    picked_upload = st.file_uploader(
-        "📎 Resim veya Belge Ekle (PNG, JPG, PDF, DOCX)",
-        type=["png", "jpg", "jpeg", "pdf", "docx"],
-        key=f"uploader_{st.session_state.upload_key}"
-    )
-with attach_col2:
+camera_file = None
+cam_col, _ = st.columns([1, 5])
+with cam_col:
     if not st.session_state.camera_open:
-        if st.button("📷 Kamera", use_container_width=True):
+        if st.button("📷 Kamera Aç"):
             st.session_state.camera_open = True
             st.rerun()
-        camera_file = None
     else:
-        if st.button("✖ Kapat", use_container_width=True):
+        if st.button("✖ Kamerayı Kapat"):
             st.session_state.camera_open = False
             st.rerun()
         camera_file = st.camera_input(
             "Fotoğraf çek",
-            key=f"camera_{st.session_state.upload_key}"
+            key=f"camera_{st.session_state.upload_key}",
+            label_visibility="collapsed"
         )
 
-picked_file = camera_file if camera_file is not None else picked_upload
-
-image_base64 = None
-image_mime = "image/png"
-
-if picked_file is not None:
-    file_name = getattr(picked_file, "name", "kamera.png").lower()
-    is_image = camera_file is not None or file_name.endswith((".png", ".jpg", ".jpeg"))
-
-    if is_image:
-        image = Image.open(picked_file)
-        st.caption("Gönderilecek resim (mesajla birlikte sohbete eklenecek):")
-        st.image(image, use_container_width=True)
-        buf = io.BytesIO()
-        image.save(buf, format="PNG")
-        image_base64 = base64.b64encode(buf.getvalue()).decode()
-    else:
-        # PDF veya DOCX - sadece daha önce eklenmemişse işle (her rerun'da tekrar işlemesin diye)
-        if active_data.get("document_name") != picked_file.name:
-            try:
-                if file_name.endswith(".pdf"):
-                    extracted_text = extract_pdf_text(picked_file)
-                else:
-                    extracted_text = extract_docx_text(picked_file)
-
-                if extracted_text.strip():
-                    active_data["document_name"] = picked_file.name
-                    active_data["document_text"] = extracted_text
-                    save_chats()
-                    st.success(
-                        f"📄 '{picked_file.name}' belge olarak eklendi "
-                        f"({len(extracted_text)} karakter). Artık sorularını bu belgeye göre cevaplayabilirim."
-                    )
-                else:
-                    st.warning("Belgeden metin çıkarılamadı (taranmış/görsel bir PDF olabilir).")
-            except Exception as e:
-                st.error(
-                    f"Belge okunamadı: {e}\n\n"
-                    "Gerekli kütüphaneler yüklü mü kontrol et: pip install pypdf python-docx"
-                )
-
-user_input = st.chat_input("sohbete başlamak için bir şey yazın...")
+# ----------------- MESAJ KUTUSU + GÖMÜLÜ '+' DOSYA BUTONU -----------------
+# accept_file=True, chat_input'un içine bu sohbetteki gibi bir ataç/artı ikonu ekler.
+# (Bu özellik Streamlit'in yeni sürümlerinde var; eski sürümde hata verirse haber ver.)
+user_message = st.chat_input(
+    "sohbete başlamak için bir şey yazın...",
+    accept_file=True,
+    file_type=["png", "jpg", "jpeg", "pdf", "docx"],
+)
 
 def system_prompt(mode):
     if mode == "😁 Troll":
@@ -314,9 +297,53 @@ def system_prompt(mode):
     return base
 
 
+def auto_title_chat(chat_key, first_user_message):
+    """İlk mesaja bakıp sohbete kısa, akıllı bir başlık verir (hâlâ varsayılan isimdeyse)."""
+    if not chat_key.startswith("Sohbet "):
+        return  # Kullanıcı zaten kendi ismini vermiş, dokunma.
+    try:
+        title_response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=[{"role": "user", "content": [{"type": "input_text", "text": first_user_message}]}],
+            instructions=(
+                "Kullanıcının ilk mesajına bakarak bu sohbet için 2-4 kelimelik, "
+                "kısa ve açıklayıcı bir Türkçe başlık üret. Sadece başlığı yaz, "
+                "tırnak işareti, noktalama veya başka hiçbir şey ekleme."
+            ),
+            max_output_tokens=20,
+        )
+        new_title = title_response.output_text.strip().strip('"').strip("'")
+        if new_title and new_title not in st.session_state.chats:
+            reordered = {}
+            for k, v in st.session_state.chats.items():
+                reordered[new_title if k == chat_key else k] = v
+            st.session_state.chats = reordered
+            if st.session_state.active_chat == chat_key:
+                st.session_state.active_chat = new_title
+    except Exception:
+        pass  # Başlık üretilemezse sorun değil, varsayılan isim kalır.
+
+
+def extract_generated_image(final_response):
+    """Responses API'nin image_generation aracı ile ürettiği görseli (varsa) base64 olarak döndürür."""
+    try:
+        for item in getattr(final_response, "output", []) or []:
+            item_type = getattr(item, "type", None)
+            if item_type == "image_generation_call":
+                result = getattr(item, "result", None)
+                if result:
+                    return result  # zaten base64 string
+    except Exception:
+        pass
+    return None
+
+
 def ask_temai(user_content, instructions, previous_response_id, max_tokens, placeholder):
     full_text = ""
     new_response_id = None
+    generated_image_b64 = None
+    # image_generation: model, kullanıcı görsel isterse kendisi resim üretebilsin diye.
+    tools = [{"type": "image_generation"}]
     try:
         with client.responses.stream(
             model="gpt-4.1-mini",
@@ -324,6 +351,7 @@ def ask_temai(user_content, instructions, previous_response_id, max_tokens, plac
             instructions=instructions,
             previous_response_id=previous_response_id,
             max_output_tokens=max_tokens,
+            tools=tools,
         ) as stream:
             for event in stream:
                 if event.type == "response.output_text.delta":
@@ -333,7 +361,21 @@ def ask_temai(user_content, instructions, previous_response_id, max_tokens, plac
             new_response_id = final_response.id
             if not full_text:
                 full_text = final_response.output_text
+            generated_image_b64 = extract_generated_image(final_response)
     except AttributeError:
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=[{"role": "user", "content": user_content}],
+            instructions=instructions,
+            previous_response_id=previous_response_id,
+            max_output_tokens=max_tokens,
+            tools=tools,
+        )
+        full_text = response.output_text
+        new_response_id = response.id
+        generated_image_b64 = extract_generated_image(response)
+    except TypeError:
+        # tools/image_generation bu kütüphane sürümünde desteklenmiyor olabilir; onsuz dene.
         response = client.responses.create(
             model="gpt-4.1-mini",
             input=[{"role": "user", "content": user_content}],
@@ -344,51 +386,110 @@ def ask_temai(user_content, instructions, previous_response_id, max_tokens, plac
         full_text = response.output_text
         new_response_id = response.id
 
-    placeholder.markdown(full_text)
-    return full_text, new_response_id
+    placeholder.markdown(full_text if full_text else "")
+    return full_text, new_response_id, generated_image_b64
 
 
-if user_input:
-    now_str = datetime.now().strftime("%H:%M")
+# chat_input hem yazı hem dosya taşıyabilir; kamera fotoğrafı ayrı bir widget'tan geliyor.
+if user_message or camera_file is not None:
+    user_text = (user_message.text.strip() if user_message else "") or ""
+    attached_from_input = user_message.files[0] if (user_message and user_message.files) else None
+    attached_file = camera_file if camera_file is not None else attached_from_input
 
-    if image_base64:
-        messages.append(["user", "image", image_base64, now_str])
+    image_base64 = None
+    image_mime = "image/png"
+    doc_just_uploaded = None
+
+    if attached_file is not None:
+        file_name = getattr(attached_file, "name", "kamera.png").lower()
+        is_image = camera_file is not None or file_name.endswith((".png", ".jpg", ".jpeg"))
+
+        if is_image:
+            image = Image.open(attached_file)
+            buf = io.BytesIO()
+            image.save(buf, format="PNG")
+            image_base64 = base64.b64encode(buf.getvalue()).decode()
+        else:
+            try:
+                if file_name.endswith(".pdf"):
+                    extracted_text = extract_pdf_text(attached_file)
+                else:
+                    extracted_text = extract_docx_text(attached_file)
+
+                if extracted_text.strip():
+                    active_data["document_name"] = attached_file.name
+                    active_data["document_text"] = extracted_text
+                    doc_just_uploaded = attached_file.name
+                else:
+                    st.warning("Belgeden metin çıkarılamadı (taranmış/görsel bir PDF olabilir).")
+            except Exception as e:
+                st.error(
+                    f"Belge okunamadı: {e}\n\n"
+                    "Gerekli kütüphaneler yüklü mü kontrol et: pip install pypdf python-docx"
+                )
+
+    # Kullanıcı sadece dosya gönderip yazı yazmadıysa, mantıklı bir varsayılan mesaj kullan.
+    if not user_text:
+        if image_base64:
+            user_text = "Bu resmi incele ve açıkla."
+        elif doc_just_uploaded:
+            user_text = f"'{doc_just_uploaded}' belgesini yükledim, içeriğini özetler misin?"
+
+    if user_text:
+        now_str = datetime.now().strftime("%H:%M")
+
+        if image_base64:
+            messages.append(["user", "image", image_base64, now_str])
+            with st.chat_message("user", avatar="🙂"):
+                st.image(io.BytesIO(base64.b64decode(image_base64)))
+        messages.append(["user", "text", user_text, now_str])
         with st.chat_message("user", avatar="🙂"):
-            st.image(io.BytesIO(base64.b64decode(image_base64)))
-    messages.append(["user", "text", user_input, now_str])
-    with st.chat_message("user", avatar="🙂"):
-        st.markdown(user_input)
-    save_chats()
+            st.markdown(user_text)
+        save_chats()
 
-    with st.chat_message("assistant", avatar="🧠"):
-        placeholder = st.empty()
-        placeholder.markdown("✍️ Temai yazıyor...")
+        with st.chat_message("assistant", avatar="🧠"):
+            placeholder = st.empty()
+            placeholder.markdown("✍️ Temai yazıyor...")
 
-        try:
-            content = [{"type": "input_text", "text": user_input}]
-            if image_base64:
-                content.append({
-                    "type": "input_image",
-                    "image_url": f"data:{image_mime};base64,{image_base64}"
-                })
+            reply = ""
+            generated_image_b64 = None
+            try:
+                content = [{"type": "input_text", "text": user_text}]
+                if image_base64:
+                    content.append({
+                        "type": "input_image",
+                        "image_url": f"data:{image_mime};base64,{image_base64}"
+                    })
 
-            reply, resp_id = ask_temai(
-                user_content=content,
-                instructions=system_prompt(mode),
-                previous_response_id=active_data.get("last_response_id"),
-                max_tokens=max_tokens,
-                placeholder=placeholder,
-            )
-            if resp_id:
-                active_data["last_response_id"] = resp_id
+                reply, resp_id, generated_image_b64 = ask_temai(
+                    user_content=content,
+                    instructions=system_prompt(mode),
+                    previous_response_id=active_data.get("last_response_id"),
+                    max_tokens=max_tokens,
+                    placeholder=placeholder,
+                )
+                if resp_id:
+                    active_data["last_response_id"] = resp_id
 
-        except Exception as e:
-            reply = f"❌ Hata: {e}"
-            placeholder.markdown(reply)
+            except Exception as e:
+                reply = f"❌ Hata: {e}"
+                placeholder.markdown(reply)
 
-    messages.append(["bot", "text", reply, datetime.now().strftime("%H:%M")])
-    save_chats()
+            if generated_image_b64:
+                st.image(io.BytesIO(base64.b64decode(generated_image_b64)))
 
-    st.session_state.upload_key += 1
-    st.session_state.camera_open = False
-    st.rerun()
+        reply_ts = datetime.now().strftime("%H:%M")
+        if reply:
+            messages.append(["bot", "text", reply, reply_ts])
+        if generated_image_b64:
+            messages.append(["bot", "image", generated_image_b64, reply_ts])
+        save_chats()
+
+        # İlk kullanıcı-bot alışverişinden sonra, hâlâ varsayılan isimdeyse başlığı otomatik koy.
+        if st.session_state.active_chat.startswith("Sohbet ") and len(messages) <= 3:
+            auto_title_chat(st.session_state.active_chat, user_text)
+            save_chats()
+
+        st.session_state.upload_key += 1
+        st.session_state.camera_open = False
+        st.rerun()
