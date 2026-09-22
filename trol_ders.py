@@ -14,7 +14,7 @@ else:
 client = OpenAI(api_key=api_key)
 # ============================================
 
-st.set_page_config(page_title="Metai", layout="wide")
+st.set_page_config(page_title="Temai", layout="wide")
 
 # ----------------- CSS -----------------
 st.markdown("""
@@ -48,7 +48,7 @@ if "chats" not in st.session_state:
     st.session_state.chats = {"Sohbet 1": []}
     st.session_state.active_chat = "Sohbet 1"
 
-if st.sidebar.button("➕ Yeni Sohbet"):
+if st.sidebar.button("➕ Yeni Sohbet Ekle"):
     name = f"Sohbet {len(st.session_state.chats)+1}"
     st.session_state.chats[name] = []
     st.session_state.active_chat = name
@@ -59,10 +59,10 @@ for chat in st.session_state.chats:
         st.session_state.active_chat = chat
         st.rerun()
 
-mode = st.sidebar.radio("Mod:", ["Normal", "🎓 Akademik", "😈 Troll"])
+mode = st.sidebar.radio("Mod:", ["Normal", "📖 Akademik", "😁 Troll"])
 
 # ----------------- MAIN -----------------
-st.title("🤖 Metai")
+st.title("🧠Temai")
 
 messages = st.session_state.chats[st.session_state.active_chat]
 
@@ -82,13 +82,13 @@ if uploaded_file:
     image.save(buf, format="PNG")
     image_base64 = base64.b64encode(buf.getvalue()).decode()
 
-user_input = st.chat_input("Bir şey yaz...")
+user_input = st.chat_input("sohbete başlamak için bir şey yazın...")
 
 def system_prompt(mode):
-    if mode == "😈 Troll":
-        return "Sen Metai adlı TROLL bir asistansın. Mantıklı görünen ama yanlış cevaplar ver."
-    if mode == "🎓 Akademik":
-        return "Sen akademik ve ciddi bir asistansın."
+    if mode == "😁 Troll":
+        return "Sen Temai adlı TROLL bir asistansın. Mantıklı görünen ama yanlış cevaplar ver."
+    if mode == "📖 Akademik":
+        return "Sen akademik ve ciddi bir asistansın.Daha resmi ve bilgisel cevaplar ver."
     return "Sen yardımcı bir asistansın."
 
 if user_input:
