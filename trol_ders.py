@@ -17,12 +17,11 @@ client = OpenAI(api_key=api_key)
 # ============================================
 
 # ================== BELGE OKUMA (PDF / Word) ==================
-# Gerekli kütüphaneler: pip install pypdf python-docx
 def extract_pdf_text(file_obj):
     try:
         from pypdf import PdfReader
     except ImportError:
-        from PyPDF2 import PdfReader  # eski kütüphane adıyla da dene
+        from PyPDF2 import PdfReader
     reader = PdfReader(file_obj)
     text_parts = []
     for page in reader.pages:
@@ -174,7 +173,6 @@ st.title("🧠Temai")
 
 messages = active_data["messages"]
 
-# Sohbet geçmişini yukarıdan aşağıya, gönderilme sırasıyla göster.
 for role, kind, content in messages:
     css_class = "user" if role == "user" else "bot"
     if kind == "image":
@@ -240,7 +238,6 @@ def system_prompt(mode):
     else:
         base = "Sen Temai adlı chatgpt ve openai ile hicbir alakası olmayan yardımcı bir asistansın."
 
-    # Belge yüklüyse, içeriğini talimata ekle (çok uzun olmasın diye kırpıyoruz).
     doc_text = active_data.get("document_text", "")
     if doc_text:
         base += (
@@ -252,7 +249,6 @@ def system_prompt(mode):
 
 
 def ask_temai(user_content, instructions, previous_response_id, max_tokens, placeholder):
-    """API'ye istek atar, mümkünse streaming ile cevabı canlı yazdırır."""
     full_text = ""
     new_response_id = None
     try:
@@ -274,8 +270,6 @@ def ask_temai(user_content, instructions, previous_response_id, max_tokens, plac
             if not full_text:
                 full_text = final_response.output_text
     except AttributeError:
-        # Kullanılan openai kütüphanesi streaming context manager'ı desteklemiyorsa
-        # normal (streaming olmayan) isteğe düş.
         response = client.responses.create(
             model="gpt-4.1-mini",
             input=[{"role": "user", "content": user_content}],
@@ -296,7 +290,6 @@ if user_input:
     messages.append(["user", "text", user_input])
     save_chats()
 
-    # "Yazıyor..." animasyonu için boş bir kutu.
     placeholder = st.empty()
     placeholder.markdown('<div class="bot">✍️ Temai yazıyor...</div>', unsafe_allow_html=True)
 
