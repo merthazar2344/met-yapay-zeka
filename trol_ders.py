@@ -61,6 +61,16 @@ for chat in st.session_state.chats:
 
 mode = st.sidebar.radio("Mod:", ["Normal", "📖 Akademik", "😁 Troll"])
 
+# Cevap uzunluğunu kullanıcı ayarlayabilsin (isteğe bağlı ama pratik)
+max_tokens = st.sidebar.slider(
+    "Cevap uzunluğu (token)",
+    min_value=300,
+    max_value=4000,
+    value=2000,
+    step=100,
+    help="Yüksek değer = daha uzun cevap yazabilir, ama daha maliyetli olur."
+)
+
 # ----------------- MAIN -----------------
 st.title("🧠Temai")
 
@@ -72,15 +82,30 @@ for role, msg in messages:
     else:
         st.markdown(f'<div class="bot">{msg}</div>', unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader("📎 Resim yükle", type=["png", "jpg", "jpeg"])
-image_base64 = None
+# ----------------- RESİM YÜKLEME -----------------
+col1, col2 = st.columns(2)
+with col1:
+    uploaded_file = st.file_uploader(
+        "📎 Galeriden resim seç",
+        type=["png", "jpg", "jpeg"],
+        key="uploader"
+    )
+with col2:
+    camera_file = st.camera_input("📷 Fotoğraf çek")
 
-if uploaded_file:
-    image = Image.open(uploaded_file)
-    st.image(image, use_column_width=True)
+# İkisinden hangisi doluysa onu kullan
+picked_file = camera_file if camera_file is not None else uploaded_file
+
+image_base64 = None
+image_mime = "image/png"
+
+if picked_file:
+    image = Image.open(picked_file)
+    st.image(image, use_container_width=True)
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     image_base64 = base64.b64encode(buf.getvalue()).decode()
+    image_mime = "image/png"
 
 user_input = st.chat_input("sohbete başlamak için bir şey yazın...")
 
@@ -88,7 +113,7 @@ def system_prompt(mode):
     if mode == "😁 Troll":
         return "Sen Temai adlı TROLL bir asistansın. Mantıklı görünen ama yanlış cevaplar ver."
     if mode == "📖 Akademik":
-        return "Sen Temai adlı akademik ve ciddi bir asistansın.Daha resmi ve bilgisel cevaplar ver."
+        return "Sen Temai adlı akademik ve ciddi bir asistansın. Daha resmi ve bilgisel cevaplar ver."
     return "Sen Temai adlı chatgpt ve openai ile hicbir alakası olmayan yardımcı bir asistansın."
 
 if user_input:
@@ -99,10 +124,12 @@ if user_input:
             {"type": "input_text", "text": user_input}
         ]
 
+        # DÜZELTME: input_image bir "image_url" (data URL) bekliyor,
+        # "image_base64" diye bir alan yok — hata buradan geliyordu.
         if image_base64:
             content.append({
                 "type": "input_image",
-                "image_base64": image_base64
+                "image_url": f"data:{image_mime};base64,{image_base64}"
             })
 
         response = client.responses.create(
@@ -112,7 +139,7 @@ if user_input:
                 "content": content
             }],
             instructions=system_prompt(mode),
-            max_output_tokens=300
+            max_output_tokens=max_tokens  # DÜZELTME: 300 -> ayarlanabilir, default 2000
         )
 
         reply = response.output_text
