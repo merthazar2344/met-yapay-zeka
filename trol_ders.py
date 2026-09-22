@@ -104,7 +104,11 @@ if "chats" not in st.session_state:
     st.session_state.active_chat = list(st.session_state.chats.keys())[0]
 
 if st.sidebar.button("➕ Yeni Sohbet Ekle", use_container_width=True):
-    name = f"Sohbet {len(st.session_state.chats)+1}"
+    n = len(st.session_state.chats) + 1
+    name = f"Sohbet {n}"
+    while name in st.session_state.chats:  # aynı isimde bir sohbet zaten varsa üzerine yazma
+        n += 1
+        name = f"Sohbet {n}"
     st.session_state.chats[name] = default_chat()
     st.session_state.active_chat = name
     save_chats()
