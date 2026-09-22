@@ -5,6 +5,7 @@ import base64
 import io
 import json
 import os
+from datetime import datetime
 
 # ================== OPENAI ==================
 api_key = None
@@ -17,12 +18,11 @@ client = OpenAI(api_key=api_key)
 # ============================================
 
 # ================== BELGE OKUMA (PDF / Word) ==================
-# Gerekli kütüphaneler: pip install pypdf python-docx
 def extract_pdf_text(file_obj):
     try:
         from pypdf import PdfReader
     except ImportError:
-        from PyPDF2 import PdfReader  # eski kütüphane adıyla da dene
+        from PyPDF2 import PdfReader
     reader = PdfReader(file_obj)
     text_parts = []
     for page in reader.pages:
@@ -61,62 +61,70 @@ def save_chats():
         st.warning(f"Sohbetler kaydedilemedi: {e}")
 
 
-st.set_page_config(page_title="Temai", layout="wide")
+st.set_page_config(page_title="Temai", page_icon="🧠", layout="wide")
 
-# ----------------- CSS -----------------
+# ----------------- CSS (genel görünüm cilası) -----------------
 st.markdown("""
 <style>
-body { background-color:#0f0f0f; color:black; }
-
-.user {
-    background:#cfcfcf;
-    color:black;
-    padding:10px;
-    border-radius:16px;
-    text-align:right;
-    margin:6px 0;
+.stApp {
+    background: radial-gradient(circle at top left, #1a1a1a 0%, #0f0f0f 60%);
 }
-
-.bot {
-    background:#e0e0e0;
-    color:black;
-    padding:10px;
-    border-radius:16px;
-    text-align:left;
-    margin:6px 0;
+section[data-testid="stSidebar"] {
+    background-color: #161616;
+    border-right: 1px solid #2a2a2a;
+}
+h1 {
+    font-weight: 700 !important;
+    letter-spacing: -0.5px;
+}
+.stChatMessage {
+    border-radius: 16px;
+    padding: 4px 6px;
+}
+.temai-toolbar {
+    background: #1b1b1b;
+    border: 1px solid #2a2a2a;
+    border-radius: 14px;
+    padding: 12px 16px;
+    margin-bottom: 14px;
+}
+.temai-timestamp {
+    font-size: 11px;
+    color: #8a8a8a;
+    margin-top: -6px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------- SIDEBAR: SOHBETLER -----------------
+# ----------------- SIDEBAR: SADECE SOHBET LİSTESİ -----------------
 st.sidebar.title("💬 Sohbetler")
 
 if "chats" not in st.session_state:
     st.session_state.chats = load_chats()
     st.session_state.active_chat = list(st.session_state.chats.keys())[0]
 
-if st.sidebar.button("➕ Yeni Sohbet Ekle"):
+if st.sidebar.button("➕ Yeni Sohbet Ekle", use_container_width=True):
     name = f"Sohbet {len(st.session_state.chats)+1}"
     st.session_state.chats[name] = default_chat()
     st.session_state.active_chat = name
     save_chats()
     st.rerun()
 
+st.sidebar.markdown("---")
+
 if "renaming_chat" not in st.session_state:
     st.session_state.renaming_chat = None
 
 for chat in list(st.session_state.chats.keys()):
     if st.session_state.renaming_chat == chat:
-        # ----- Yeniden adlandırma modu -----
         new_name = st.sidebar.text_input(
             "Yeni isim", value=chat, key=f"rename_input_{chat}", label_visibility="collapsed"
         )
         col_ok, col_cancel = st.sidebar.columns(2)
         with col_ok:
-            if st.button("✅ Kaydet", key=f"rename_save_{chat}"):
+            if st.button("✅ Kaydet", key=f"rename_save_{chat}", use_container_width=True):
                 new_name = new_name.strip()
                 if new_name and (new_name == chat or new_name not in st.session_state.chats):
-                    # Sırayı bozmadan, sadece bu anahtarın adını değiştirerek yeni bir dict kur.
                     reordered = {}
                     for k, v in st.session_state.chats.items():
                         reordered[new_name if k == chat else k] = v
@@ -129,15 +137,14 @@ for chat in list(st.session_state.chats.keys()):
                 save_chats()
                 st.rerun()
         with col_cancel:
-            if st.button("✖ Vazgeç", key=f"rename_cancel_{chat}"):
+            if st.button("✖ Vazgeç", key=f"rename_cancel_{chat}", use_container_width=True):
                 st.session_state.renaming_chat = None
                 st.rerun()
     else:
-        # ----- Normal görünüm -----
         col_a, col_b, col_c = st.sidebar.columns([3, 1, 1])
         with col_a:
             label = f"🟢 {chat}" if chat == st.session_state.active_chat else chat
-            if st.button(label, key=f"select_{chat}"):
+            if st.button(label, key=f"select_{chat}", use_container_width=True):
                 st.session_state.active_chat = chat
                 st.rerun()
         with col_b:
@@ -152,99 +159,93 @@ for chat in list(st.session_state.chats.keys()):
                 save_chats()
                 st.rerun()
 
-mode = st.sidebar.radio("Mod:", ["Normal", "📖 Akademik", "😁 Troll"])
-
-max_tokens = st.sidebar.slider(
-    "Cevap uzunluğu (token)",
-    min_value=300,
-    max_value=4000,
-    value=2000,
-    step=100,
-    help="Yüksek değer = daha uzun cevap yazabilir, ama daha maliyetli olur."
-)
-
-# ----------------- SIDEBAR: BELGE YÜKLEME -----------------
-st.sidebar.markdown("---")
-st.sidebar.subheader("📄 Belge")
+# ----------------- MAIN -----------------
+st.title("🧠 Temai")
 
 active_data = st.session_state.chats[st.session_state.active_chat]
 
-if active_data.get("document_name"):
-    st.sidebar.success(f"Yüklü: {active_data['document_name']}")
-    if st.sidebar.button("🗑️ Belgeyi Kaldır"):
-        active_data["document_name"] = None
-        active_data["document_text"] = ""
-        save_chats()
-        st.rerun()
-else:
-    doc_file = st.sidebar.file_uploader(
-        "PDF veya Word yükle",
-        type=["pdf", "docx"],
-        key="doc_uploader"
-    )
-    if doc_file is not None:
-        extracted_text = ""
-        try:
-            if doc_file.name.lower().endswith(".pdf"):
-                extracted_text = extract_pdf_text(doc_file)
-            else:
-                extracted_text = extract_docx_text(doc_file)
-        except Exception as e:
-            st.sidebar.error(
-                f"Belge okunamadı: {e}\n\n"
-                "Gerekli kütüphaneler yüklü mü kontrol et: "
-                "pip install pypdf python-docx"
+# ----------------- ARAÇ ÇUBUĞU (mod, token, belge) -----------------
+with st.container():
+    st.markdown('<div class="temai-toolbar">', unsafe_allow_html=True)
+    tool_col1, tool_col2, tool_col3 = st.columns([2, 1.4, 2])
+
+    with tool_col1:
+        mode = st.radio(
+            "Mod:",
+            ["Normal", "📖 Akademik", "😁 Troll"],
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+
+    with tool_col2:
+        with st.popover("⚙️ Ayarlar"):
+            max_tokens = st.slider(
+                "Cevap uzunluğu (token)",
+                min_value=300,
+                max_value=4000,
+                value=2000,
+                step=100,
+                help="Yüksek değer = daha uzun cevap yazabilir, ama daha maliyetli olur."
             )
 
-        if extracted_text.strip():
-            active_data["document_name"] = doc_file.name
-            active_data["document_text"] = extracted_text
-            save_chats()
-            st.sidebar.success(f"'{doc_file.name}' yüklendi ({len(extracted_text)} karakter).")
-            st.rerun()
-        elif extracted_text == "":
-            st.sidebar.warning("Belgeden metin çıkarılamadı (taranmış/görsel bir PDF olabilir).")
+    with tool_col3:
+        if active_data.get("document_name"):
+            doc_col1, doc_col2 = st.columns([3, 1])
+            with doc_col1:
+                st.markdown(f"📄 **{active_data['document_name']}**")
+            with doc_col2:
+                if st.button("🗑️", key="remove_doc"):
+                    active_data["document_name"] = None
+                    active_data["document_text"] = ""
+                    save_chats()
+                    st.rerun()
+        else:
+            st.caption("📄 Belge eklenmedi")
 
-# ----------------- MAIN -----------------
-st.title("🧠Temai")
+    st.markdown('</div>', unsafe_allow_html=True)
 
+# ----------------- SOHBET GEÇMİŞİ -----------------
 messages = active_data["messages"]
 
-# Sohbet geçmişini yukarıdan aşağıya, gönderilme sırasıyla göster.
-for role, kind, content in messages:
-    css_class = "user" if role == "user" else "bot"
-    if kind == "image":
-        st.markdown(
-            f'<div class="{css_class}">'
-            f'<img src="data:image/png;base64,{content}" '
-            f'style="max-width:280px;border-radius:12px;display:inline-block;"/>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
+for msg in messages:
+    if len(msg) == 4:
+        role, kind, content, ts = msg
     else:
-        st.markdown(f'<div class="{css_class}">{content}</div>', unsafe_allow_html=True)
+        role, kind, content = msg
+        ts = ""
 
-# ----------------- RESİM YÜKLEME -----------------
+    display_role = "user" if role == "user" else "assistant"
+    avatar = "🙂" if role == "user" else "🧠"
+
+    with st.chat_message(display_role, avatar=avatar):
+        if kind == "image":
+            st.image(io.BytesIO(base64.b64decode(content)))
+        else:
+            st.markdown(content)
+        if ts:
+            st.markdown(f'<div class="temai-timestamp">{ts}</div>', unsafe_allow_html=True)
+
+# ----------------- TEK BUTON: RESİM + BELGE EKLEME -----------------
 if "upload_key" not in st.session_state:
     st.session_state.upload_key = 0
 if "camera_open" not in st.session_state:
     st.session_state.camera_open = False
 
-col1, col2 = st.columns(2)
-with col1:
-    uploaded_file = st.file_uploader(
-        "📎 Galeriden resim seç",
-        type=["png", "jpg", "jpeg"],
+attach_col1, attach_col2 = st.columns([4, 1])
+with attach_col1:
+    picked_upload = st.file_uploader(
+        "📎 Resim veya Belge Ekle (PNG, JPG, PDF, DOCX)",
+        type=["png", "jpg", "jpeg", "pdf", "docx"],
         key=f"uploader_{st.session_state.upload_key}"
     )
-with col2:
+with attach_col2:
     if not st.session_state.camera_open:
-        if st.button("📷 Kamerayı Aç"):
+        if st.button("📷 Kamera", use_container_width=True):
             st.session_state.camera_open = True
             st.rerun()
         camera_file = None
     else:
-        if st.button("✖ Kamerayı Kapat"):
+        if st.button("✖ Kapat", use_container_width=True):
             st.session_state.camera_open = False
             st.rerun()
         camera_file = st.camera_input(
@@ -252,19 +253,46 @@ with col2:
             key=f"camera_{st.session_state.upload_key}"
         )
 
-picked_file = camera_file if camera_file is not None else uploaded_file
+picked_file = camera_file if camera_file is not None else picked_upload
 
 image_base64 = None
 image_mime = "image/png"
 
-if picked_file:
-    image = Image.open(picked_file)
-    st.caption("Gönderilecek resim (mesajla birlikte sohbete eklenecek):")
-    st.image(image, use_container_width=True)
-    buf = io.BytesIO()
-    image.save(buf, format="PNG")
-    image_base64 = base64.b64encode(buf.getvalue()).decode()
-    image_mime = "image/png"
+if picked_file is not None:
+    file_name = getattr(picked_file, "name", "kamera.png").lower()
+    is_image = camera_file is not None or file_name.endswith((".png", ".jpg", ".jpeg"))
+
+    if is_image:
+        image = Image.open(picked_file)
+        st.caption("Gönderilecek resim (mesajla birlikte sohbete eklenecek):")
+        st.image(image, use_container_width=True)
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        image_base64 = base64.b64encode(buf.getvalue()).decode()
+    else:
+        # PDF veya DOCX - sadece daha önce eklenmemişse işle (her rerun'da tekrar işlemesin diye)
+        if active_data.get("document_name") != picked_file.name:
+            try:
+                if file_name.endswith(".pdf"):
+                    extracted_text = extract_pdf_text(picked_file)
+                else:
+                    extracted_text = extract_docx_text(picked_file)
+
+                if extracted_text.strip():
+                    active_data["document_name"] = picked_file.name
+                    active_data["document_text"] = extracted_text
+                    save_chats()
+                    st.success(
+                        f"📄 '{picked_file.name}' belge olarak eklendi "
+                        f"({len(extracted_text)} karakter). Artık sorularını bu belgeye göre cevaplayabilirim."
+                    )
+                else:
+                    st.warning("Belgeden metin çıkarılamadı (taranmış/görsel bir PDF olabilir).")
+            except Exception as e:
+                st.error(
+                    f"Belge okunamadı: {e}\n\n"
+                    "Gerekli kütüphaneler yüklü mü kontrol et: pip install pypdf python-docx"
+                )
 
 user_input = st.chat_input("sohbete başlamak için bir şey yazın...")
 
@@ -276,7 +304,6 @@ def system_prompt(mode):
     else:
         base = "Sen Temai adlı chatgpt ve openai ile hicbir alakası olmayan yardımcı bir asistansın."
 
-    # Belge yüklüyse, içeriğini talimata ekle (çok uzun olmasın diye kırpıyoruz).
     doc_text = active_data.get("document_text", "")
     if doc_text:
         base += (
@@ -288,7 +315,6 @@ def system_prompt(mode):
 
 
 def ask_temai(user_content, instructions, previous_response_id, max_tokens, placeholder):
-    """API'ye istek atar, mümkünse streaming ile cevabı canlı yazdırır."""
     full_text = ""
     new_response_id = None
     try:
@@ -302,16 +328,12 @@ def ask_temai(user_content, instructions, previous_response_id, max_tokens, plac
             for event in stream:
                 if event.type == "response.output_text.delta":
                     full_text += event.delta
-                    placeholder.markdown(
-                        f'<div class="bot">{full_text}▌</div>', unsafe_allow_html=True
-                    )
+                    placeholder.markdown(full_text + "▌")
             final_response = stream.get_final_response()
             new_response_id = final_response.id
             if not full_text:
                 full_text = final_response.output_text
     except AttributeError:
-        # Kullanılan openai kütüphanesi streaming context manager'ı desteklemiyorsa
-        # normal (streaming olmayan) isteğe düş.
         response = client.responses.create(
             model="gpt-4.1-mini",
             input=[{"role": "user", "content": user_content}],
@@ -322,43 +344,49 @@ def ask_temai(user_content, instructions, previous_response_id, max_tokens, plac
         full_text = response.output_text
         new_response_id = response.id
 
-    placeholder.markdown(f'<div class="bot">{full_text}</div>', unsafe_allow_html=True)
+    placeholder.markdown(full_text)
     return full_text, new_response_id
 
 
 if user_input:
+    now_str = datetime.now().strftime("%H:%M")
+
     if image_base64:
-        messages.append(["user", "image", image_base64])
-    messages.append(["user", "text", user_input])
+        messages.append(["user", "image", image_base64, now_str])
+        with st.chat_message("user", avatar="🙂"):
+            st.image(io.BytesIO(base64.b64decode(image_base64)))
+    messages.append(["user", "text", user_input, now_str])
+    with st.chat_message("user", avatar="🙂"):
+        st.markdown(user_input)
     save_chats()
 
-    # "Yazıyor..." animasyonu için boş bir kutu.
-    placeholder = st.empty()
-    placeholder.markdown('<div class="bot">✍️ Temai yazıyor...</div>', unsafe_allow_html=True)
+    with st.chat_message("assistant", avatar="🧠"):
+        placeholder = st.empty()
+        placeholder.markdown("✍️ Temai yazıyor...")
 
-    try:
-        content = [{"type": "input_text", "text": user_input}]
-        if image_base64:
-            content.append({
-                "type": "input_image",
-                "image_url": f"data:{image_mime};base64,{image_base64}"
-            })
+        try:
+            content = [{"type": "input_text", "text": user_input}]
+            if image_base64:
+                content.append({
+                    "type": "input_image",
+                    "image_url": f"data:{image_mime};base64,{image_base64}"
+                })
 
-        reply, resp_id = ask_temai(
-            user_content=content,
-            instructions=system_prompt(mode),
-            previous_response_id=active_data.get("last_response_id"),
-            max_tokens=max_tokens,
-            placeholder=placeholder,
-        )
-        if resp_id:
-            active_data["last_response_id"] = resp_id
+            reply, resp_id = ask_temai(
+                user_content=content,
+                instructions=system_prompt(mode),
+                previous_response_id=active_data.get("last_response_id"),
+                max_tokens=max_tokens,
+                placeholder=placeholder,
+            )
+            if resp_id:
+                active_data["last_response_id"] = resp_id
 
-    except Exception as e:
-        reply = f"❌ Hata: {e}"
-        placeholder.markdown(f'<div class="bot">{reply}</div>', unsafe_allow_html=True)
+        except Exception as e:
+            reply = f"❌ Hata: {e}"
+            placeholder.markdown(reply)
 
-    messages.append(["bot", "text", reply])
+    messages.append(["bot", "text", reply, datetime.now().strftime("%H:%M")])
     save_chats()
 
     st.session_state.upload_key += 1
