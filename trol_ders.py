@@ -88,8 +88,8 @@ def system_prompt(mode):
     if mode == "😁 Troll":
         return "Sen Temai adlı TROLL bir asistansın. Mantıklı görünen ama yanlış cevaplar ver."
     if mode == "📖 Akademik":
-        return "Sen akademik ve ciddi bir asistansın.Daha resmi ve bilgisel cevaplar ver."
-    return "Sen yardımcı bir asistansın."
+        return "Sen Temai adlı akademik ve ciddi bir asistansın.Daha resmi ve bilgisel cevaplar ver."
+    return "Sen Temai adlı chatgpt ve openai ile hicbir alakası olmayan yardımcı bir asistansın."
 
 if user_input:
     messages.append(("user", user_input))
