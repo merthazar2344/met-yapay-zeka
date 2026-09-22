@@ -76,22 +76,39 @@ st.title("🧠Temai")
 
 messages = st.session_state.chats[st.session_state.active_chat]
 
-for role, msg in messages:
-    if role == "user":
-        st.markdown(f'<div class="user">{msg}</div>', unsafe_allow_html=True)
+# Sohbet geçmişini yukarıdan aşağıya, gönderilme sırasıyla göster.
+# Her satır ("user"/"bot", "text"/"image", içerik) şeklinde tutuluyor.
+for role, kind, content in messages:
+    css_class = "user" if role == "user" else "bot"
+    if kind == "image":
+        st.markdown(
+            f'<div class="{css_class}">'
+            f'<img src="data:image/png;base64,{content}" '
+            f'style="max-width:280px;border-radius:12px;display:inline-block;"/>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
     else:
-        st.markdown(f'<div class="bot">{msg}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="{css_class}">{content}</div>', unsafe_allow_html=True)
 
 # ----------------- RESİM YÜKLEME -----------------
+# key'lere sayaç ekliyoruz: mesaj gönderildikten sonra bu sayaç artınca
+# widget'lar sıfırlanıyor, yani eski resim bir sonraki mesaja yapışıp kalmıyor.
+if "upload_key" not in st.session_state:
+    st.session_state.upload_key = 0
+
 col1, col2 = st.columns(2)
 with col1:
     uploaded_file = st.file_uploader(
         "📎 Galeriden resim seç",
         type=["png", "jpg", "jpeg"],
-        key="uploader"
+        key=f"uploader_{st.session_state.upload_key}"
     )
 with col2:
-    camera_file = st.camera_input("📷 Fotoğraf çek")
+    camera_file = st.camera_input(
+        "📷 Fotoğraf çek",
+        key=f"camera_{st.session_state.upload_key}"
+    )
 
 # İkisinden hangisi doluysa onu kullan
 picked_file = camera_file if camera_file is not None else uploaded_file
@@ -101,6 +118,7 @@ image_mime = "image/png"
 
 if picked_file:
     image = Image.open(picked_file)
+    st.caption("Gönderilecek resim (mesajla birlikte sohbete eklenecek):")
     st.image(image, use_container_width=True)
     buf = io.BytesIO()
     image.save(buf, format="PNG")
@@ -117,7 +135,10 @@ def system_prompt(mode):
     return "Sen Temai adlı chatgpt ve openai ile hicbir alakası olmayan yardımcı bir asistansın."
 
 if user_input:
-    messages.append(("user", user_input))
+    # Sohbet akışında önce resim, sonra yazı görünsün (gönderme sırası).
+    if image_base64:
+        messages.append(("user", "image", image_base64))
+    messages.append(("user", "text", user_input))
 
     try:
         content = [
@@ -147,5 +168,8 @@ if user_input:
     except Exception as e:
         reply = f"❌ Hata: {e}"
 
-    messages.append(("bot", reply))
+    messages.append(("bot", "text", reply))
+
+    # Yükleme alanını temizle ki aynı resim bir sonraki mesaja yapışmasın.
+    st.session_state.upload_key += 1
     st.rerun()
