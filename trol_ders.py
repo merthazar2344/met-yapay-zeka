@@ -17,11 +17,12 @@ client = OpenAI(api_key=api_key)
 # ============================================
 
 # ================== BELGE OKUMA (PDF / Word) ==================
+# Gerekli kütüphaneler: pip install pypdf python-docx
 def extract_pdf_text(file_obj):
     try:
         from pypdf import PdfReader
     except ImportError:
-        from PyPDF2 import PdfReader
+        from PyPDF2 import PdfReader  # eski kütüphane adıyla da dene
     reader = PdfReader(file_obj)
     text_parts = []
     for page in reader.pages:
@@ -101,19 +102,55 @@ if st.sidebar.button("➕ Yeni Sohbet Ekle"):
     save_chats()
     st.rerun()
 
+if "renaming_chat" not in st.session_state:
+    st.session_state.renaming_chat = None
+
 for chat in list(st.session_state.chats.keys()):
-    col_a, col_b = st.sidebar.columns([4, 1])
-    with col_a:
-        if st.button(chat, key=f"select_{chat}"):
-            st.session_state.active_chat = chat
-            st.rerun()
-    with col_b:
-        if len(st.session_state.chats) > 1 and st.button("🗑️", key=f"del_{chat}"):
-            del st.session_state.chats[chat]
-            if st.session_state.active_chat == chat:
-                st.session_state.active_chat = list(st.session_state.chats.keys())[0]
-            save_chats()
-            st.rerun()
+    if st.session_state.renaming_chat == chat:
+        # ----- Yeniden adlandırma modu -----
+        new_name = st.sidebar.text_input(
+            "Yeni isim", value=chat, key=f"rename_input_{chat}", label_visibility="collapsed"
+        )
+        col_ok, col_cancel = st.sidebar.columns(2)
+        with col_ok:
+            if st.button("✅ Kaydet", key=f"rename_save_{chat}"):
+                new_name = new_name.strip()
+                if new_name and (new_name == chat or new_name not in st.session_state.chats):
+                    # Sırayı bozmadan, sadece bu anahtarın adını değiştirerek yeni bir dict kur.
+                    reordered = {}
+                    for k, v in st.session_state.chats.items():
+                        reordered[new_name if k == chat else k] = v
+                    st.session_state.chats = reordered
+                    if st.session_state.active_chat == chat:
+                        st.session_state.active_chat = new_name
+                else:
+                    st.sidebar.warning("Bu isim boş olamaz veya zaten kullanılıyor.")
+                st.session_state.renaming_chat = None
+                save_chats()
+                st.rerun()
+        with col_cancel:
+            if st.button("✖ Vazgeç", key=f"rename_cancel_{chat}"):
+                st.session_state.renaming_chat = None
+                st.rerun()
+    else:
+        # ----- Normal görünüm -----
+        col_a, col_b, col_c = st.sidebar.columns([3, 1, 1])
+        with col_a:
+            label = f"🟢 {chat}" if chat == st.session_state.active_chat else chat
+            if st.button(label, key=f"select_{chat}"):
+                st.session_state.active_chat = chat
+                st.rerun()
+        with col_b:
+            if st.button("✏️", key=f"ren_{chat}"):
+                st.session_state.renaming_chat = chat
+                st.rerun()
+        with col_c:
+            if len(st.session_state.chats) > 1 and st.button("🗑️", key=f"del_{chat}"):
+                del st.session_state.chats[chat]
+                if st.session_state.active_chat == chat:
+                    st.session_state.active_chat = list(st.session_state.chats.keys())[0]
+                save_chats()
+                st.rerun()
 
 mode = st.sidebar.radio("Mod:", ["Normal", "📖 Akademik", "😁 Troll"])
 
@@ -173,6 +210,7 @@ st.title("🧠Temai")
 
 messages = active_data["messages"]
 
+# Sohbet geçmişini yukarıdan aşağıya, gönderilme sırasıyla göster.
 for role, kind, content in messages:
     css_class = "user" if role == "user" else "bot"
     if kind == "image":
@@ -238,6 +276,7 @@ def system_prompt(mode):
     else:
         base = "Sen Temai adlı chatgpt ve openai ile hicbir alakası olmayan yardımcı bir asistansın."
 
+    # Belge yüklüyse, içeriğini talimata ekle (çok uzun olmasın diye kırpıyoruz).
     doc_text = active_data.get("document_text", "")
     if doc_text:
         base += (
@@ -249,6 +288,7 @@ def system_prompt(mode):
 
 
 def ask_temai(user_content, instructions, previous_response_id, max_tokens, placeholder):
+    """API'ye istek atar, mümkünse streaming ile cevabı canlı yazdırır."""
     full_text = ""
     new_response_id = None
     try:
@@ -270,6 +310,8 @@ def ask_temai(user_content, instructions, previous_response_id, max_tokens, plac
             if not full_text:
                 full_text = final_response.output_text
     except AttributeError:
+        # Kullanılan openai kütüphanesi streaming context manager'ı desteklemiyorsa
+        # normal (streaming olmayan) isteğe düş.
         response = client.responses.create(
             model="gpt-4.1-mini",
             input=[{"role": "user", "content": user_content}],
@@ -290,6 +332,7 @@ if user_input:
     messages.append(["user", "text", user_input])
     save_chats()
 
+    # "Yazıyor..." animasyonu için boş bir kutu.
     placeholder = st.empty()
     placeholder.markdown('<div class="bot">✍️ Temai yazıyor...</div>', unsafe_allow_html=True)
 
